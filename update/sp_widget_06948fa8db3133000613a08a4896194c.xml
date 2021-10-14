@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
     <sp_widget action="INSERT_OR_UPDATE">
         <category>custom</category>
-        <client_script><![CDATA[function($rootScope,$scope) {
+        <client_script><![CDATA[function($rootScope, $scope, spUtil) {
 	/* widget controller */
 	var c = this;
 	// Use a position indicator to know which record to update
@@ -36,6 +36,43 @@
 	$rootScope.$on('deleteNote', function(event,data) {
 		c.data.notes.splice(c.notePos, 1);
 	});
+	
+	c.snNoteUpdate = function(name, sysID){
+		for(var i = 0; i < c.data.notes.length; i++)
+			if(c.data.notes[i].sys_id == sysID)
+				{
+				if(name.data.record.note)
+					c.data.notes[i].note = 	name.data.record.note.display_value;
+				if(name.data.record.title)
+					c.data.notes[i].title = name.data.record.title.display_value;
+				c.server.update();
+				}
+	}
+	
+	c.snNoteDelete = function(sysID){
+		c.server.get({
+			action	:	'snDeleteNote',
+			noteID	: sysID
+			}).then(function(r){
+				c.data.notes = r.data.notes;
+			});
+	}
+	
+	spUtil.recordWatch($scope, 'x_snc_createnotes_note', 'numberANYTHING', function(name){
+		console.log(name.data.operation);
+		console.log(name);
+		switch(name.data.operation)
+			{
+				case 'insert':
+					c.server.refresh();
+					break;
+				case 'update':
+					c.snNoteUpdate(name, name.data.sys_id);
+					break;
+				case 'delete':
+					c.snNoteDelete(name.data.sys_id);
+			}
+		});
 
 }
 ]]></client_script>
@@ -54,7 +91,7 @@
         <internal>false</internal>
         <link><![CDATA[function link(scope, element, attrs, controller) {  }]]></link>
         <name>Notes List</name>
-        <option_schema/>
+        <option_schema>[{"hint":"Specify Notes list title for this Notes LISt widget instance","name":"list_title","section":"other","default_value":"Notes","label":"List title","type":"string"},{"hint":"Select maximum number of Notes to display","name":"max_records_shown","section":"other","default_value":"5","label":"Max records shown","type":"choice","choices":[{"label":"3","value":"3"},{"label":"5","value":"5"},{"label":"7","value":"7"},{"label":"11","value":"11"},{"label":"15","value":"15"},{"label":"20","value":"20"}]}]</option_schema>
         <public>false</public>
         <roles/>
         <script><![CDATA[(function() {
@@ -63,6 +100,7 @@
 	var noteGR = new GlideRecord('x_snc_createnotes_note');
 	noteGR.addQuery('user', gs.getUser().getID());
 	noteGR.orderByDesc('sys_created_on');
+	noteGR.setLimit(options.max_records_shown);
 	noteGR.query();
 	while (noteGR.next()) {
 		var noteObj = {};
@@ -82,8 +120,14 @@
 			data.noteID = id;
 			data.newNote = {};
 			$sp.getRecordValues(data.newNote,newNote,"title,note,sys_id");
-
 		}
+		if(input.action == 'snDeleteNote')
+			{
+			var grNote = new GlideRecord('x_snc_createnotes_note');
+			if(grNote.get('sys_id', input.noteID))
+				grNote.deleteRecord();
+			}
+		
 	}
 }
 )();]]></script>
@@ -92,23 +136,26 @@
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2019-05-30 18:13:04</sys_created_on>
         <sys_id>06948fa8db3133000613a08a4896194c</sys_id>
-        <sys_mod_count>10</sys_mod_count>
+        <sys_mod_count>25</sys_mod_count>
         <sys_name>Notes List</sys_name>
         <sys_package display_value="CreateNotes" source="x_snc_createnotes">df5fd9a5090232007f44e1046c8ff69f</sys_package>
         <sys_policy/>
         <sys_scope display_value="CreateNotes">df5fd9a5090232007f44e1046c8ff69f</sys_scope>
         <sys_update_name>sp_widget_06948fa8db3133000613a08a4896194c</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2019-05-30 19:15:59</sys_updated_on>
+        <sys_updated_on>2021-10-14 13:37:28</sys_updated_on>
         <template><![CDATA[<div class="panel panel-default">
   <div class="panel-heading clearfix">
     <h3 class="panel-title pull-left">
-      ${Notes}
+      {{::c.options.list_title}}
     </h3>
     <button class="btn btn-default pull-right" ng-click="c.newNote()"> 
       <span class="glyphicon glyphicon-plus"></span> 
     </button>
   </div>
+  <p class="list-group-item-text">
+  	Max {{::c.options.max_records_shown}} records shown
+  </p>
   <div class="panel-body"> 
     <input placeholder="Filter" class="form-control" ng-model="noteFilter" /> 
   </div>
